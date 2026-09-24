@@ -100,6 +100,21 @@ export default function Home() {
     await loadAssignments()
   }
 
+  // Delete an assignment
+  async function deleteAssignment(assignmentId: string) {
+    const { error } = await supabase
+      .from('assignments')
+      .delete()
+      .eq('id', assignmentId)
+
+    if (error) {
+      console.error('Error deleting assignment:', error.message)
+      return
+    }
+
+    await loadAssignments()
+  }
+
   return (
     <main>
       <h1>Study Scheduler</h1>
@@ -194,6 +209,12 @@ export default function Home() {
                 }
               >
                 +0.5 Hour
+              </button>
+
+              <button
+                onClick={() => deleteAssignment(assignment.id)}
+              >
+                Delete
               </button>
             </div>
           )
