@@ -58,7 +58,6 @@ export default function Home() {
 
     console.log('Assignment saved:', data)
 
-    // Clear the form after saving
     setTitle('')
     setDueDate('')
     setEffortHours('')
@@ -77,6 +76,28 @@ export default function Home() {
     }
 
     setAssignments(data)
+  }
+
+  // Add 0.5 hours to an assignment's completed time
+  async function addCompletedTime(
+    assignmentId: string,
+    currentHours: number
+  ) {
+    const newHours = currentHours + 0.5
+
+    const { error } = await supabase
+      .from('assignments')
+      .update({
+        hours_completed: newHours,
+      })
+      .eq('id', assignmentId)
+
+    if (error) {
+      console.error('Error updating assignment:', error.message)
+      return
+    }
+
+    await loadAssignments()
   }
 
   return (
@@ -142,13 +163,41 @@ export default function Home() {
       <section>
         <h2>Your Assignments</h2>
 
-        {assignments.map((assignment) => (
-          <div key={assignment.id}>
-            <h3>{assignment.title}</h3>
-            <p>Due: {assignment.due_date}</p>
-            <p>Estimated hours: {assignment.effort_hours}</p>
-          </div>
-        ))}
+        {assignments.map((assignment) => {
+          const remainingHours =
+            assignment.effort_hours - assignment.hours_completed
+
+          return (
+            <div key={assignment.id}>
+              <h3>{assignment.title}</h3>
+
+              <p>Due: {assignment.due_date}</p>
+
+              <p>
+                Estimated hours: {assignment.effort_hours}
+              </p>
+
+              <p>
+                Completed: {assignment.hours_completed}
+              </p>
+
+              <p>
+                Remaining: {remainingHours}
+              </p>
+
+              <button
+                onClick={() =>
+                  addCompletedTime(
+                    assignment.id,
+                    Number(assignment.hours_completed)
+                  )
+                }
+              >
+                +0.5 Hour
+              </button>
+            </div>
+          )
+        })}
       </section>
     </main>
   )
