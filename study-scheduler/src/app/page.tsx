@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
 export default function Home() {
@@ -12,6 +12,33 @@ export default function Home() {
   const [effortHours, setEffortHours] = useState('')
 
   const [assignments, setAssignments] = useState<any[]>([])
+
+  // Automatically load assignments when there's a logged-in session,
+  // and react to future login/logout events
+  useEffect(() => {
+    // Check if there's already a session (e.g. on page refresh)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        loadAssignments()
+      }
+    })
+
+    // Listen for login/logout events while the page is open
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          loadAssignments()
+        } else {
+          setAssignments([])
+        }
+      }
+    )
+
+    // Clean up the listener when the component unmounts
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
 
   // Log the user into Supabase
   async function handleLogin() {
@@ -61,6 +88,8 @@ export default function Home() {
     setTitle('')
     setDueDate('')
     setEffortHours('')
+
+    await loadAssignments()
   }
 
   // Load the current user's assignments
@@ -171,7 +200,7 @@ export default function Home() {
         </button>
 
         <button onClick={loadAssignments}>
-          Load Assignments
+          Refresh
         </button>
       </section>
 
