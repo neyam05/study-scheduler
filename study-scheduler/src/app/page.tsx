@@ -11,7 +11,9 @@ export default function Home() {
   const [dueDate, setDueDate] = useState('')
   const [effortHours, setEffortHours] = useState('')
 
-  // Logs the user into Supabase
+  const [assignments, setAssignments] = useState<any[]>([])
+
+  // Log the user into Supabase
   async function handleLogin() {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
@@ -26,9 +28,8 @@ export default function Home() {
     console.log('Logged in user:', data.user)
   }
 
-  // Saves a new assignment to Supabase
+  // Save a new assignment to Supabase
   async function handleAddAssignment() {
-    // Find out which user is currently logged in
     const {
       data: { user },
       error: userError,
@@ -39,7 +40,6 @@ export default function Home() {
       return
     }
 
-    // Insert the assignment into our assignments table
     const { data, error } = await supabase
       .from('assignments')
       .insert({
@@ -57,6 +57,26 @@ export default function Home() {
     }
 
     console.log('Assignment saved:', data)
+
+    // Clear the form after saving
+    setTitle('')
+    setDueDate('')
+    setEffortHours('')
+  }
+
+  // Load the current user's assignments
+  async function loadAssignments() {
+    const { data, error } = await supabase
+      .from('assignments')
+      .select('*')
+      .order('due_date', { ascending: true })
+
+    if (error) {
+      console.error('Error loading assignments:', error.message)
+      return
+    }
+
+    setAssignments(data)
   }
 
   return (
@@ -113,6 +133,22 @@ export default function Home() {
         <button onClick={handleAddAssignment}>
           Add Assignment
         </button>
+
+        <button onClick={loadAssignments}>
+          Load Assignments
+        </button>
+      </section>
+
+      <section>
+        <h2>Your Assignments</h2>
+
+        {assignments.map((assignment) => (
+          <div key={assignment.id}>
+            <h3>{assignment.title}</h3>
+            <p>Due: {assignment.due_date}</p>
+            <p>Estimated hours: {assignment.effort_hours}</p>
+          </div>
+        ))}
       </section>
     </main>
   )
