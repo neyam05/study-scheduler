@@ -2,6 +2,15 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import StudyAvailability from './StudyAvailability'
+import StudySchedule from './StudySchedule'
+
+type Assignment = {
+  id: string | number
+  title: string
+  due_date: string
+  effort_hours: number
+}
 
 export default function Home() {
   const [email, setEmail] = useState('')
@@ -10,6 +19,26 @@ export default function Home() {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [effortHours, setEffortHours] = useState('')
+
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+const [assignmentError, setAssignmentError] = useState('')
+
+async function loadAssignments(userId: string) {
+  setAssignmentError('')
+
+  const { data, error } = await supabase
+    .from('assignments')
+    .select('id, title, due_date, effort_hours')
+    .eq('user_id', userId)
+    .order('due_date', { ascending: true })
+
+  if (error) {
+    setAssignmentError(error.message)
+    return
+  }
+
+  setAssignments(data ?? [])
+}
 
   // Logs the user into Supabase
   async function handleLogin() {
@@ -24,6 +53,10 @@ export default function Home() {
     }
 
     console.log('Logged in user:', data.user)
+
+    if (data.user) {
+  await loadAssignments(data.user.id)
+}
   }
 
   // Saves a new assignment to Supabase
@@ -57,6 +90,11 @@ export default function Home() {
     }
 
     console.log('Assignment saved:', data)
+
+    await loadAssignments(user.id)
+      setTitle('')
+      setDueDate('')
+      setEffortHours('')
   }
 
   return (
@@ -114,6 +152,31 @@ export default function Home() {
           Add Assignment
         </button>
       </section>
+      <section>
+  <h2>Your Assignments</h2>
+
+  {assignmentError && (
+    <p role="alert">{assignmentError}</p>
+  )}
+
+  {assignments.length === 0 ? (
+    <p>No assignments loaded yet. Log in and add one.</p>
+  ) : (
+    <ul>
+      {assignments.map((assignment) => (
+        <li key={assignment.id}>
+          <strong>{assignment.title}</strong>
+          {' — Due: '}
+          {assignment.due_date}
+          {' — '}
+          {assignment.effort_hours} hours
+        </li>
+      ))}
+    </ul>
+  )}
+</section>
+    <StudyAvailability />
+    <StudySchedule />
     </main>
   )
 }
