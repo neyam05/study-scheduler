@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const days = [
@@ -27,6 +27,45 @@ export default function StudyAvailability() {
   const [windows, setWindows] = useState<Availability[]>([])
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+  let cancelled = false
+
+  async function restoreAvailability() {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) return
+
+    const { data, error } = await supabase
+      .from('availability')
+      .select('id, day_of_week, start_time, end_time')
+      .eq('user_id', user.id)
+      .order('day_of_week')
+      .order('start_time')
+
+    if (cancelled) return
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setWindows(data ?? [])
+  }
+
+  void restoreAvailability().catch(() => {
+    if (!cancelled) {
+      setMessage('Could not load availability. Try the load button.')
+    }
+  })
+
+  return () => {
+    cancelled = true
+  }
+}, [])
 
   async function fetchWindows(userId: string) {
     const { data, error } = await supabase

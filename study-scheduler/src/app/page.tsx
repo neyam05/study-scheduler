@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import StudyAvailability from './StudyAvailability'
 import StudySchedule from './StudySchedule'
+import AIAssignmentEntry from './AIAssignmentEntry'
 
 type Assignment = {
   id: string | number
@@ -21,7 +22,45 @@ export default function Home() {
   const [effortHours, setEffortHours] = useState('')
 
   const [assignments, setAssignments] = useState<Assignment[]>([])
-const [assignmentError, setAssignmentError] = useState('')
+  const [assignmentError, setAssignmentError] = useState('')
+
+  useEffect(() => {
+  let cancelled = false
+
+  async function restoreAssignments() {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
+
+    if (userError || !user) return
+
+    const { data, error } = await supabase
+      .from('assignments')
+      .select('id, title, due_date, effort_hours')
+      .eq('user_id', user.id)
+      .order('due_date', { ascending: true })
+
+    if (cancelled) return
+
+    if (error) {
+      setAssignmentError(error.message)
+      return
+    }
+
+    setAssignments(data ?? [])
+  }
+
+  void restoreAssignments().catch(() => {
+    if (!cancelled) {
+      setAssignmentError('Could not load assignments. Please try logging in.')
+    }
+  })
+
+  return () => {
+    cancelled = true
+  }
+}, [])
 
 async function loadAssignments(userId: string) {
   setAssignmentError('')
@@ -62,6 +101,15 @@ async function loadAssignments(userId: string) {
   // Saves a new assignment to Supabase
   async function handleAddAssignment() {
     // Find out which user is currently logged in
+    if (
+          !title.trim() ||
+          !dueDate ||
+          !Number.isFinite(Number(effortHours)) ||
+          Number(effortHours) <= 0
+        ) {
+  alert('Enter an assignment name, deadline, and positive estimated hours.')
+  return
+}
     const {
       data: { user },
       error: userError,
@@ -124,6 +172,17 @@ async function loadAssignments(userId: string) {
       </section>
 
       <section>
+        <AIAssignmentEntry
+        onParsed={(assignment) => {
+        setTitle(assignment.title)
+        setDueDate(assignment.due_date ?? '')
+        setEffortHours(
+        assignment.effort_hours === null
+            ? ''
+            : String(assignment.effort_hours)
+    )
+  }}
+/>
         <h2>Add Assignment</h2>
 
         <input
