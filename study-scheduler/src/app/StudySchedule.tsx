@@ -75,9 +75,10 @@ export default function StudySchedule() {
   return (
     <section>
       <h2>Your Study Schedule</h2>
+
       <p>
-        Schedule assignments into your availability over the next seven days.
-        Deadlines are treated as the end of their selected day.
+        Schedule assignments into your availability over the next seven
+        days. Deadlines are treated as the end of their selected day.
       </p>
 
       <button
@@ -118,6 +119,7 @@ export default function StudySchedule() {
           {schedule.unscheduled.length > 0 && (
             <>
               <h3>Work That Couldn’t Fit</h3>
+
               <ul>
                 {schedule.unscheduled.map((task) => (
                   <li key={task.assignmentId}>
@@ -125,6 +127,7 @@ export default function StudySchedule() {
                   </li>
                 ))}
               </ul>
+
               <p>
                 Add availability before the deadline or review your effort
                 estimates, then generate again.

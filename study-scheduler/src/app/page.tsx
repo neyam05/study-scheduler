@@ -86,6 +86,9 @@ export default function Home() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [authReady, setAuthReady] = useState(false)
 
+  const [deletingId, setDeletingId] = useState<string | number | null>(null)
+  const [scheduleVersion, setScheduleVersion] = useState(0)
+
   useEffect(() => {
     const {
       data: { subscription },
@@ -204,7 +207,6 @@ export default function Home() {
         return
       }
 
-      // Clear child component state, including schedules and AI drafts.
       window.location.reload()
     } catch {
       setLoginMessage('Could not log out. Please try again.')
@@ -265,90 +267,142 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteAssignment(assignment: Assignment) {
+    const confirmed = window.confirm(
+      `Delete "${assignment.title}"? This cannot be undone.`
+    )
+
+    if (!confirmed) return
+
+    setDeletingId(assignment.id)
+    setAssignmentError('')
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        setAssignmentError('Please log in before deleting.')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('assignments')
+        .delete()
+        .eq('id', assignment.id)
+        .eq('user_id', user.id)
+        .select('id')
+
+      if (error) {
+        setAssignmentError(error.message)
+        return
+      }
+
+      if (!data?.length) {
+        setAssignmentError(
+          'Assignment was not deleted. Refresh the page and try again.'
+        )
+        return
+      }
+
+      setAssignments((current) =>
+        current.filter((item) => item.id !== assignment.id)
+      )
+
+      setScheduleVersion((current) => current + 1)
+    } catch {
+      setAssignmentError('Could not delete the assignment. Please try again.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const totalHours = assignments.reduce(
     (total, assignment) => total + Number(assignment.effort_hours),
     0
   )
 
   if (!authReady) {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">
-      <p role="status">Loading your session…</p>
-    </main>
-  )
-}
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">
+        <p role="status">Loading your session…</p>
+      </main>
+    )
+  }
 
-if (!isLoggedIn) {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100 [color-scheme:dark]">
-      <div className="w-full max-w-md">
-        <header className="mb-8 text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-indigo-400">
-            Your personal study workspace
-          </p>
-
-          <h1 className="text-4xl font-bold tracking-tight">
-            StudyOS
-          </h1>
-
-          <p className="mt-3 text-sm text-slate-400">
-            Log in to access your assignments and study schedule.
-          </p>
-        </header>
-
-        <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Welcome back</h2>
-
-          <form
-            className="mt-5 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void handleLogin()
-            }}
-          >
-            <label className="block text-sm text-slate-300">
-              Email
-              <input
-                className={inputClass}
-                type="email"
-                autoComplete="username"
-                placeholder="you@example.com"
-                value={email}
-                required
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-
-            <label className="block text-sm text-slate-300">
-              Password
-              <input
-                className={inputClass}
-                type="password"
-                autoComplete="current-password"
-                placeholder="Your password"
-                value={password}
-                required
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-
-            <button
-              className={`${buttonClass} w-full`}
-              type="submit"
-              disabled={loggingIn}
-            >
-              {loggingIn ? 'Logging in…' : 'Log in'}
-            </button>
-
-            <p role="status" className="text-sm text-slate-400">
-              {loginMessage}
+  if (!isLoggedIn) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100 [color-scheme:dark]">
+        <div className="w-full max-w-md">
+          <header className="mb-8 text-center">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-indigo-400">
+              Your personal study workspace
             </p>
-          </form>
-        </section>
-      </div>
-    </main>
-  )
-}
+
+            <h1 className="text-4xl font-bold tracking-tight">
+              StudyOS
+            </h1>
+
+            <p className="mt-3 text-sm text-slate-400">
+              Log in to access your assignments and study schedule.
+            </p>
+          </header>
+
+          <section className={cardClass}>
+            <h2 className="text-xl font-semibold">Welcome back</h2>
+
+            <form
+              className="mt-5 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleLogin()
+              }}
+            >
+              <label className="block text-sm text-slate-300">
+                Email
+                <input
+                  className={inputClass}
+                  type="email"
+                  autoComplete="username"
+                  placeholder="you@example.com"
+                  value={email}
+                  required
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </label>
+
+              <label className="block text-sm text-slate-300">
+                Password
+                <input
+                  className={inputClass}
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Your password"
+                  value={password}
+                  required
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </label>
+
+              <button
+                className={`${buttonClass} w-full`}
+                type="submit"
+                disabled={loggingIn}
+              >
+                {loggingIn ? 'Logging in…' : 'Log in'}
+              </button>
+
+              <p role="status" className="text-sm text-slate-400">
+                {loginMessage}
+              </p>
+            </form>
+          </section>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 [color-scheme:dark]">
@@ -465,7 +519,7 @@ if (!isLoggedIn) {
             </section>
 
             <div className={componentClass}>
-              <StudySchedule />
+              <StudySchedule key={scheduleVersion} />
             </div>
           </div>
 
@@ -473,72 +527,24 @@ if (!isLoggedIn) {
             <section className={cardClass}>
               <h2 className="text-lg font-semibold">Your Account</h2>
 
-              {isLoggedIn ? (
-                <div className="mt-4 space-y-4">
-                  <p className="text-sm text-emerald-400">
-                    You’re signed in.
-                  </p>
+              <div className="mt-4 space-y-4">
+                <p className="text-sm text-emerald-400">
+                  You’re signed in.
+                </p>
 
-                  <button
-                    type="button"
-                    className={`${buttonClass} w-full`}
-                    disabled={loggingOut}
-                    onClick={() => void handleLogout()}
-                  >
-                    {loggingOut ? 'Logging out…' : 'Log out'}
-                  </button>
-
-                  <p role="status" className="text-sm text-slate-400">
-                    {loginMessage}
-                  </p>
-                </div>
-              ) : (
-                <form
-                  className="mt-4 space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault()
-                    void handleLogin()
-                  }}
+                <button
+                  type="button"
+                  className={`${buttonClass} w-full`}
+                  disabled={loggingOut}
+                  onClick={() => void handleLogout()}
                 >
-                  <label className="block text-sm text-slate-300">
-                    Email
-                    <input
-                      className={inputClass}
-                      type="email"
-                      autoComplete="username"
-                      placeholder="you@example.com"
-                      value={email}
-                      required
-                      onChange={(event) => setEmail(event.target.value)}
-                    />
-                  </label>
+                  {loggingOut ? 'Logging out…' : 'Log out'}
+                </button>
 
-                  <label className="block text-sm text-slate-300">
-                    Password
-                    <input
-                      className={inputClass}
-                      type="password"
-                      autoComplete="current-password"
-                      placeholder="Your password"
-                      value={password}
-                      required
-                      onChange={(event) => setPassword(event.target.value)}
-                    />
-                  </label>
-
-                  <button
-                    className={`${buttonClass} w-full`}
-                    type="submit"
-                    disabled={loggingIn}
-                  >
-                    {loggingIn ? 'Logging in…' : 'Log in'}
-                  </button>
-
-                  <p role="status" className="text-sm text-slate-400">
-                    {loginMessage}
-                  </p>
-                </form>
-              )}
+                <p role="status" className="text-sm text-slate-400">
+                  {loginMessage}
+                </p>
+              </div>
             </section>
 
             <div className={componentClass}>
@@ -556,7 +562,7 @@ if (!isLoggedIn) {
 
               {assignments.length === 0 ? (
                 <p className="mt-4 text-sm leading-6 text-slate-400">
-                  No assignments loaded. Log in or add your first task.
+                  No assignments loaded. Add your first task.
                 </p>
               ) : (
                 <ul className="mt-4 space-y-3">
@@ -577,6 +583,19 @@ if (!isLoggedIn) {
                           ? ' hour'
                           : ' hours'}
                       </p>
+
+                      <button
+                        type="button"
+                        disabled={deletingId !== null}
+                        onClick={() =>
+                          void handleDeleteAssignment(assignment)
+                        }
+                        className="mt-3 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-medium text-rose-400 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingId === assignment.id
+                          ? 'Deleting…'
+                          : 'Delete'}
+                      </button>
                     </li>
                   ))}
                 </ul>
