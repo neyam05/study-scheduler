@@ -81,11 +81,12 @@ export default function Home() {
   const [loginMessage, setLoginMessage] = useState('')
 
   const [loggingIn, setLoggingIn] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [saving, setSaving] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [authReady, setAuthReady] = useState(false)
+  const [saving, setSaving] = useState(false)
 
+  const [editingId, setEditingId] = useState<string | number | null>(null)
   const [deletingId, setDeletingId] = useState<string | number | null>(null)
   const [scheduleVersion, setScheduleVersion] = useState(0)
 
@@ -103,6 +104,7 @@ export default function Home() {
         setTitle('')
         setDueDate('')
         setEffortHours('')
+        setEditingId(null)
         setSaveMessage('')
         setAssignmentError('')
         setLoginMessage('')
@@ -215,6 +217,27 @@ export default function Home() {
     }
   }
 
+  function handleEditAssignment(assignment: Assignment) {
+    setEditingId(assignment.id)
+    setTitle(assignment.title)
+    setDueDate(assignment.due_date.split('T')[0])
+    setEffortHours(String(assignment.effort_hours))
+    setSaveMessage('Editing assignment. Update the fields and save.')
+
+    document.getElementById('assignment-form')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }
+
+  function cancelEditing() {
+    setEditingId(null)
+    setTitle('')
+    setDueDate('')
+    setEffortHours('')
+    setSaveMessage('')
+  }
+
   async function handleAddAssignment() {
     setSaveMessage('')
 
@@ -243,22 +266,55 @@ export default function Home() {
         return
       }
 
-      const { error } = await supabase.from('assignments').insert({
-        user_id: user.id,
+      const values = {
         title: title.trim(),
         due_date: dueDate,
         effort_hours: Number(effortHours),
-      })
-
-      if (error) {
-        setSaveMessage(error.message)
-        return
       }
 
+      if (editingId !== null) {
+        const { data, error } = await supabase
+          .from('assignments')
+          .update(values)
+          .eq('id', editingId)
+          .eq('user_id', user.id)
+          .select('id')
+
+        if (error) {
+          setSaveMessage(error.message)
+          return
+        }
+
+        if (!data?.length) {
+          setSaveMessage(
+            'Assignment was not updated. Refresh and try again.'
+          )
+          return
+        }
+      } else {
+        const { error } = await supabase
+          .from('assignments')
+          .insert({
+            ...values,
+            user_id: user.id,
+          })
+
+        if (error) {
+          setSaveMessage(error.message)
+          return
+        }
+      }
+
+      setSaveMessage(
+        editingId !== null ? 'Assignment updated.' : 'Assignment saved.'
+      )
+
+      setEditingId(null)
       setTitle('')
       setDueDate('')
       setEffortHours('')
-      setSaveMessage('Assignment saved.')
+      setScheduleVersion((current) => current + 1)
+
       await loadAssignments(user.id)
     } catch {
       setSaveMessage('Could not save your assignment. Please try again.')
@@ -310,6 +366,10 @@ export default function Home() {
       setAssignments((current) =>
         current.filter((item) => item.id !== assignment.id)
       )
+
+      if (editingId === assignment.id) {
+        cancelEditing()
+      }
 
       setScheduleVersion((current) => current + 1)
     } catch {
@@ -437,6 +497,9 @@ export default function Home() {
             <div className={componentClass}>
               <AIAssignmentEntry
                 onParsed={(assignment) => {
+                  if (saving || deletingId !== null) return
+
+                  setEditingId(null)
                   setTitle(assignment.title)
                   setDueDate(assignment.due_date ?? '')
                   setEffortHours(
@@ -449,70 +512,99 @@ export default function Home() {
               />
             </div>
 
-            <section className={cardClass}>
-              <h2 className="text-lg font-semibold">Add Assignment</h2>
+            <section
+              id="assignment-form"
+              className={`${cardClass} scroll-mt-6`}
+            >
+              <h2 className="text-lg font-semibold">
+                {editingId !== null ? 'Edit Assignment' : 'Add Assignment'}
+              </h2>
 
               <p className="mt-2 text-sm text-slate-400">
-                Enter a task manually or review the details filled in by AI.
+                {editingId !== null
+                  ? 'Update the details below, then save your changes.'
+                  : 'Enter a task manually or review the details filled in by AI.'}
               </p>
 
               <form
-                className="mt-5 space-y-4"
+                className="mt-5"
                 onSubmit={(event) => {
                   event.preventDefault()
                   void handleAddAssignment()
                 }}
               >
-                <label className="block text-sm text-slate-300">
-                  Assignment name
-                  <input
-                    className={inputClass}
-                    type="text"
-                    placeholder="e.g. Linear algebra practice"
-                    value={title}
-                    required
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                </label>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="block text-sm text-slate-300">
-                    Due date
-                    <input
-                      className={inputClass}
-                      type="date"
-                      value={dueDate}
-                      required
-                      onChange={(event) => setDueDate(event.target.value)}
-                    />
-                  </label>
-
-                  <label className="block text-sm text-slate-300">
-                    Estimated hours
-                    <input
-                      className={inputClass}
-                      type="number"
-                      min="0.01"
-                      step="any"
-                      placeholder="e.g. 2"
-                      value={effortHours}
-                      required
-                      onChange={(event) =>
-                        setEffortHours(event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-
-                <button
-                  className={buttonClass}
-                  type="submit"
-                  disabled={saving}
+                <fieldset
+                  disabled={saving || deletingId !== null}
+                  className="space-y-4"
                 >
-                  {saving ? 'Saving…' : 'Add Assignment'}
-                </button>
+                  <label className="block text-sm text-slate-300">
+                    Assignment name
+                    <input
+                      className={inputClass}
+                      type="text"
+                      placeholder="e.g. Linear algebra practice"
+                      value={title}
+                      required
+                      onChange={(event) => setTitle(event.target.value)}
+                    />
+                  </label>
 
-                <p role="status" className="text-sm text-slate-400">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="block text-sm text-slate-300">
+                      Due date
+                      <input
+                        className={inputClass}
+                        type="date"
+                        value={dueDate}
+                        required
+                        onChange={(event) => setDueDate(event.target.value)}
+                      />
+                    </label>
+
+                    <label className="block text-sm text-slate-300">
+                      Estimated hours
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        placeholder="e.g. 2"
+                        value={effortHours}
+                        required
+                        onChange={(event) =>
+                          setEffortHours(event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      className={buttonClass}
+                      type="submit"
+                      disabled={saving || deletingId !== null}
+                    >
+                      {saving
+                        ? 'Saving…'
+                        : editingId !== null
+                          ? 'Save Changes'
+                          : 'Add Assignment'}
+                    </button>
+
+                    {editingId !== null && (
+                      <button
+                        type="button"
+                        disabled={saving || deletingId !== null}
+                        onClick={cancelEditing}
+                        className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-medium text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </fieldset>
+
+                <p role="status" className="mt-4 text-sm text-slate-400">
                   {saveMessage}
                 </p>
               </form>
@@ -535,7 +627,7 @@ export default function Home() {
                 <button
                   type="button"
                   className={`${buttonClass} w-full`}
-                  disabled={loggingOut}
+                  disabled={loggingOut || saving || deletingId !== null}
                   onClick={() => void handleLogout()}
                 >
                   {loggingOut ? 'Logging out…' : 'Log out'}
@@ -584,18 +676,29 @@ export default function Home() {
                           : ' hours'}
                       </p>
 
-                      <button
-                        type="button"
-                        disabled={deletingId !== null}
-                        onClick={() =>
-                          void handleDeleteAssignment(assignment)
-                        }
-                        className="mt-3 rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-medium text-rose-400 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deletingId === assignment.id
-                          ? 'Deleting…'
-                          : 'Delete'}
-                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={saving || deletingId !== null}
+                          onClick={() => handleEditAssignment(assignment)}
+                          className="rounded-lg border border-indigo-400/30 px-3 py-2 text-xs font-medium text-indigo-300 transition hover:bg-indigo-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={saving || deletingId !== null}
+                          onClick={() =>
+                            void handleDeleteAssignment(assignment)
+                          }
+                          className="rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-medium text-rose-400 transition hover:bg-rose-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingId === assignment.id
+                            ? 'Deleting…'
+                            : 'Delete'}
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
